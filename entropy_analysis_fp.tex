@@ -1,0 +1,1104 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usepackage{tcolorbox}
+\usepackage{fancybox}
+\usepackage{enumitem}
+
+% Page geometry
+\geometry{margin=1in}
+
+% Colors
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{termcolor}{rgb}{0.0,0.4,0.6}
+\definecolor{boxcolor}{rgb}{0.9,0.95,1.0}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=termcolor,
+    urlcolor=blue,
+    citecolor=green
+}
+
+% Code listing style
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{codepurple},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codegreen},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+% Custom command for term references
+\newcommand{\term}[2]{\textcolor{termcolor}{\textbf{#1}}\textsuperscript{\hyperref[#2]{[#2]}}}
+
+% Custom command for simple term (no superscript clutter for repeated terms)
+\newcommand{\sterm}[1]{\textcolor{termcolor}{\textbf{#1}}}
+
+% Info box environment
+\newtcolorbox{infobox}[1][]{
+    colback=boxcolor,
+    colframe=termcolor,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+% Key idea box
+\newtcolorbox{keyidea}{
+    colback=yellow!10,
+    colframe=orange!80,
+    fonttitle=\bfseries,
+    title=Key Idea
+}
+
+\title{\textbf{Understanding Rule Discovery in Data Validation}\\[0.5em]
+\Large An Information Theory Approach\\[0.3em]
+\normalsize (Research by Team Phoenix: rahul.kumar@kbra.com)}
+\author{Analysis for tape-whisperer Project}
+\date{Q1 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document explains how to figure out the number of ``rules'' or patterns hidden in a spreadsheet of financial data. We use ideas from \term{information theory}{A1}---the mathematics of measuring information---to answer questions like: How much ``surprise'' is in each cell? How many rules could possibly exist? And how many are actually useful? We find that while \textit{trillions} of rules are theoretically possible, only about 3,000--5,000 are practically useful.
+
+\textbf{Note:} Every time you see a colored term like \term{this}{A1}, it means there's an explanation in the Appendix. Click it or flip to the back!
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%----------------------------------------------------------------------
+\section{What Problem Are We Solving?}
+%----------------------------------------------------------------------
+
+Imagine you work at a bank, and every day you receive spreadsheets containing information about thousands of loans. Each spreadsheet has:
+\begin{itemize}
+    \item \textbf{224 columns} (like ``Loan Amount'', ``Interest Rate'', ``Borrower State'', etc.)
+    \item \textbf{Thousands of rows} (one row per loan)
+\end{itemize}
+
+Your job is to check if the data is correct. But here's the challenge: the rules for ``correct'' are complicated!
+
+\begin{infobox}[Examples of Hidden Rules]
+\begin{itemize}
+    \item If the loan type is ``FHA'', then the down payment must be at least 3.5\%
+    \item If the property is in California, the tax rate must be between 0.7\% and 1.2\%
+    \item If the borrower is self-employed, additional income documents are required
+\end{itemize}
+\end{infobox}
+
+\textbf{Our Goal:} Automatically discover these rules from historical data, then use them to find errors in new spreadsheets.
+
+\textbf{The Big Questions:}
+\begin{enumerate}
+    \item How much ``information'' is in each cell of the spreadsheet?
+    \item How many possible rules could there be?
+    \item How do we find the useful rules without drowning in useless ones?
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Measuring Information: Entropy}
+%----------------------------------------------------------------------
+
+\subsection{What is Entropy?}
+
+\term{Entropy}{A2} is a way to measure \textbf{surprise} or \textbf{uncertainty}. 
+
+Think of it this way: if someone tells you ``the sky is blue,'' you're not surprised---you already knew that. But if they tell you ``it's snowing in Miami in July,'' you're very surprised!
+
+\begin{keyidea}
+\textbf{Entropy measures how surprised you'd be, on average, when you learn something.}
+
+\begin{itemize}
+    \item High entropy = lots of surprise = lots of uncertainty = hard to predict
+    \item Low entropy = little surprise = very predictable
+\end{itemize}
+\end{keyidea}
+
+\subsection{The Entropy Formula}
+
+The formula for entropy was invented by Claude Shannon in 1948:
+
+\begin{equation}
+H(X) = -\sum_{i=1}^{n} p(x_i) \times \log_2(p(x_i))
+\label{eq:entropy}
+\end{equation}
+
+Let's break this down piece by piece:
+
+\begin{itemize}
+    \item \term{$H(X)$}{A3} --- The entropy of variable $X$, measured in \term{bits}{A4}
+    \item \term{$\sum$}{A5} --- The summation symbol (``add up all of these'')
+    \item \term{$p(x_i)$}{A6} --- The probability of outcome $x_i$ happening
+    \item \term{$\log_2$}{A7} --- The logarithm base 2 (related to binary/computer math)
+    \item The negative sign at the front makes the answer positive (since $\log_2$ of a fraction is negative)
+\end{itemize}
+
+\subsection{A Simple Example: Coin Flip}
+
+Let's calculate the entropy of a fair coin flip.
+
+\textbf{Setup:}
+\begin{itemize}
+    \item Two possible outcomes: Heads or Tails
+    \item Each has probability $p = 0.5$ (50\%)
+\end{itemize}
+
+\textbf{Calculation:}
+\begin{align}
+H(\text{coin}) &= -[p(\text{heads}) \times \log_2(p(\text{heads})) + p(\text{tails}) \times \log_2(p(\text{tails}))] \\
+&= -[0.5 \times \log_2(0.5) + 0.5 \times \log_2(0.5)] \\
+&= -[0.5 \times (-1) + 0.5 \times (-1)] \\
+&= -[-0.5 + (-0.5)] \\
+&= -[-1] \\
+&= 1 \text{ bit}
+\end{align}
+
+\begin{infobox}[What does ``1 bit'' mean?]
+One bit is the amount of information needed to answer a single yes/no question. A fair coin flip has exactly 1 bit of entropy because you need exactly one yes/no question to determine the outcome: ``Is it heads?''
+\end{infobox}
+
+\subsection{Entropy for a Spreadsheet Cell}
+
+Now let's apply this to our spreadsheet problem. Consider a cell that can contain one of three types of data:
+\begin{enumerate}
+    \item Text (like a name or code)
+    \item A number (like a dollar amount)
+    \item A date (like ``03/15/2024'')
+\end{enumerate}
+
+If each type is equally likely (probability = $\frac{1}{3}$ each):
+
+\begin{align}
+H(\text{cell type}) &= -3 \times \frac{1}{3} \times \log_2\left(\frac{1}{3}\right) \\
+&= -\log_2\left(\frac{1}{3}\right) \\
+&= \log_2(3) \\
+&\approx 1.585 \text{ bits}
+\end{align}
+
+\begin{table}[h]
+\centering
+\caption{Entropy for different scenarios}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Scenario} & \textbf{Probabilities} & \textbf{Entropy} \\
+\midrule
+Equal chance of 3 types & (33\%, 33\%, 33\%) & 1.585 bits \\
+Mostly numbers & (60\%, 30\%, 10\%) & 1.295 bits \\
+Almost always numbers & (90\%, 5\%, 5\%) & 0.569 bits \\
+Always the same type & (100\%, 0\%, 0\%) & 0 bits \\
+\bottomrule
+\end{tabular}
+\label{tab:entropy_examples}
+\end{table}
+
+\begin{keyidea}
+When something is completely predictable (100\% one outcome), entropy is \textbf{zero}. When all outcomes are equally likely, entropy is at its \textbf{maximum}.
+\end{keyidea}
+
+%----------------------------------------------------------------------
+\section{Entropy of an Entire Spreadsheet}
+%----------------------------------------------------------------------
+
+\subsection{Adding Up All the Cells}
+
+Our spreadsheet has:
+\begin{itemize}
+    \item 100 rows
+    \item 224 columns
+    \item Total cells: $100 \times 224 = 22,400$ cells
+\end{itemize}
+
+If each cell were \term{independent}{A8} (not related to other cells), the total entropy would simply be:
+
+\begin{equation}
+H_{\text{total}} = \text{(number of cells)} \times H_{\text{per cell}}
+\end{equation}
+
+Using our 3-type example:
+\begin{align}
+H_{\text{total}} &= 22,400 \times 1.585 \\
+&\approx 35,502 \text{ bits}
+\end{align}
+
+This means it would take about 35,502 yes/no questions to completely describe the spreadsheet---if every cell were random and unpredictable.
+
+\subsection{But Real Data Has Structure!}
+
+Here's the key insight: \textbf{real spreadsheets aren't random}. They have structure:
+
+\begin{itemize}
+    \item Column A is \textit{always} a date
+    \item Column B is \textit{always} a loan ID
+    \item If the loan type is ``FHA'', certain fields \textit{must} have specific values
+\end{itemize}
+
+This structure creates \term{dependencies}{A9} between cells. When cells are dependent, knowing one cell tells you something about another cell.
+
+\begin{infobox}[Example of Dependency]
+If I tell you ``the loan type is FHA'', you can immediately predict:
+\begin{itemize}
+    \item The minimum down payment (3.5\%)
+    \item The required insurance type (MIP)
+    \item The maximum loan amount (varies by county)
+\end{itemize}
+These predictions reduce your uncertainty---and therefore reduce entropy!
+\end{infobox}
+
+\subsection{Conditional Entropy}
+
+\term{Conditional entropy}{A10} measures how much uncertainty remains \textit{after} you learn something else.
+
+We write it as:
+\begin{equation}
+H(B | A)
+\end{equation}
+
+This reads as: ``The entropy of B, \textit{given} that we know A.''
+
+\begin{keyidea}
+\textbf{Rules are relationships where knowing A reduces uncertainty about B.}
+
+Mathematically: $H(B|A) < H(B)$
+
+In words: ``If knowing the loan type helps us predict the interest rate, then there's a rule connecting them.''
+\end{keyidea}
+
+%----------------------------------------------------------------------
+\section{What is a ``Rule''?}
+%----------------------------------------------------------------------
+
+\subsection{Association Rules}
+
+An \term{association rule}{A11} is a statement of the form:
+
+\begin{center}
+\fbox{\textbf{IF} [condition] \textbf{THEN} [consequence]}
+\end{center}
+
+Examples:
+\begin{itemize}
+    \item IF loan\_type = ``FHA'' THEN down\_payment $\geq$ 3.5\%
+    \item IF state = ``CA'' AND property\_type = ``Condo'' THEN HOA\_required = ``Yes''
+    \item IF income\_verified = ``No'' THEN max\_LTV $\leq$ 80\%
+\end{itemize}
+
+\subsection{Parts of a Rule}
+
+Every rule has two parts:
+
+\begin{enumerate}
+    \item \textbf{Antecedent} (the ``IF'' part): The condition(s) that must be true
+    \item \textbf{Consequent} (the ``THEN'' part): What follows when the condition is true
+\end{enumerate}
+
+The number of conditions in the antecedent is called \term{$k$}{A12}:
+\begin{itemize}
+    \item $k=1$: One condition (e.g., IF loan\_type = ``FHA'')
+    \item $k=2$: Two conditions (e.g., IF loan\_type = ``FHA'' AND state = ``CA'')
+    \item $k=3$: Three conditions (and so on...)
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{How Many Rules Could Exist?}
+%----------------------------------------------------------------------
+
+\subsection{Counting Rule Structures}
+
+First, let's count how many different rule ``shapes'' are possible, ignoring specific values.
+
+With 224 columns, we need to choose:
+\begin{enumerate}
+    \item Which columns form the antecedent (the ``IF'' conditions)
+    \item Which column is the consequent (the ``THEN'' result)
+\end{enumerate}
+
+The formula uses \term{combinations}{A13}:
+
+\begin{equation}
+N_{\text{structures}}(n, k) = n \times \binom{n-1}{k}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $n$ = number of columns (224)
+    \item $k$ = number of antecedent columns
+    \item $\binom{n-1}{k}$ = ``n-1 choose k'' = ways to pick $k$ items from $n-1$
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\caption{Number of rule structures by antecedent size}
+\begin{tabular}{@{}ccc@{}}
+\toprule
+\textbf{Antecedent Size ($k$)} & \textbf{Rule Structures} & \textbf{In Powers of 10} \\
+\midrule
+1 & 49,952 & $\approx 5 \times 10^4$ \\
+2 & 5,578,496 & $\approx 5.6 \times 10^6$ \\
+3 & 414,315,776 & $\approx 4.1 \times 10^8$ \\
+4 & 23,063,051,456 & $\approx 2.3 \times 10^{10}$ \\
+5 & 1,024,377,696,256 & $\approx 1.0 \times 10^{12}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:rule_structures}
+\end{table}
+
+\subsection{Adding Specific Values}
+
+But wait---we haven't counted the specific \textit{values} yet! 
+
+The rule ``IF loan\_type = FHA'' is different from ``IF loan\_type = VA''.
+
+If each column has about 20 possible values on average, then for each rule structure, we multiply by the number of value combinations:
+
+\begin{equation}
+N_{\text{full}} = N_{\text{structures}} \times (\text{average values per column})^k
+\end{equation}
+
+For $k=2$ (two-condition rules):
+\begin{align}
+N_{\text{full}} &= 5,578,496 \times 20^2 \\
+&= 5,578,496 \times 400 \\
+&\approx 2.2 \text{ billion rules}
+\end{align}
+
+For $k=3$:
+\begin{align}
+N_{\text{full}} &= 414,315,776 \times 20^3 \\
+&\approx 3.3 \text{ trillion rules}
+\end{align}
+
+\begin{infobox}[The Rule Explosion Problem]
+With just 224 columns and rules up to 3 conditions, there are over \textbf{3 trillion} possible rules! 
+
+Even if a computer could check 1 million rules per second, it would take over 100 years to check them all.
+
+This is why we need smart ways to filter down to useful rules.
+\end{infobox}
+
+%----------------------------------------------------------------------
+\section{Measuring Rule Quality}
+%----------------------------------------------------------------------
+
+Not all rules are equally useful. We need ways to measure rule quality.
+
+\subsection{Support: How Often Does This Rule Apply?}
+
+\term{Support}{A14} measures how frequently a rule's conditions appear in the data.
+
+\begin{equation}
+\text{Support}(A \Rightarrow B) = \frac{\text{Number of rows where A AND B are true}}{\text{Total number of rows}}
+\end{equation}
+
+\textbf{Example:} If 15,000 out of 100,000 loans are FHA loans with valid down payments:
+\[
+\text{Support} = \frac{15,000}{100,000} = 0.15 = 15\%
+\]
+
+\begin{infobox}[Why Support Matters]
+A rule with very low support (say, 0.001\%) might only apply to 1 loan out of 100,000. Even if it's correct, it's not very useful because it rarely applies.
+
+\textbf{Typical minimum:} We often require at least 0.1\% support (100 rows out of 100,000).
+\end{infobox}
+
+\subsection{Confidence: When It Applies, How Often Is It Right?}
+
+\term{Confidence}{A15} measures how reliable a rule is when its conditions are met.
+
+\begin{equation}
+\text{Confidence}(A \Rightarrow B) = \frac{P(A \text{ and } B)}{P(A)} = \frac{\text{Support}(A \Rightarrow B)}{\text{Support}(A)}
+\end{equation}
+
+\textbf{Example:} 
+\begin{itemize}
+    \item 15\% of all loans are FHA with valid down payments
+    \item 16\% of all loans are FHA (regardless of down payment)
+\end{itemize}
+
+\[
+\text{Confidence} = \frac{0.15}{0.16} = 0.9375 = 93.75\%
+\]
+
+This means: ``When a loan is FHA, 93.75\% of the time it has a valid down payment.''
+
+\subsection{Lift: Is This Rule Better Than Guessing?}
+
+\term{Lift}{A16} compares the rule to random chance.
+
+\begin{equation}
+\text{Lift}(A \Rightarrow B) = \frac{\text{Confidence}(A \Rightarrow B)}{P(B)}
+\end{equation}
+
+\begin{itemize}
+    \item \textbf{Lift = 1}: The rule is no better than random chance
+    \item \textbf{Lift $>$ 1}: The rule is better than guessing (useful!)
+    \item \textbf{Lift $<$ 1}: The rule is worse than guessing (anti-pattern)
+\end{itemize}
+
+\textbf{Example:}
+\begin{itemize}
+    \item Confidence = 93.75\%
+    \item Overall, 85\% of all loans have valid down payments
+\end{itemize}
+
+\[
+\text{Lift} = \frac{0.9375}{0.85} = 1.10
+\]
+
+This rule is 10\% better than just guessing ``valid down payment'' for everyone.
+
+%----------------------------------------------------------------------
+\section{Information Theory Meets Rule Quality}
+%----------------------------------------------------------------------
+
+\subsection{Rules Reduce Uncertainty}
+
+Here's the deep connection: \textbf{good rules reduce entropy}.
+
+When you learn the loan type, you become less uncertain about other fields. This reduction in uncertainty is called \term{information gain}{A17}:
+
+\begin{equation}
+\text{Information Gain} = H(B) - H(B|A)
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $H(B)$ = entropy of B before knowing A (original uncertainty)
+    \item $H(B|A)$ = entropy of B after knowing A (remaining uncertainty)
+\end{itemize}
+
+\subsection{A Rule's Value}
+
+We can combine support and information gain to measure a rule's total value:
+
+\begin{equation}
+\text{Value}(\text{rule}) = \text{Support} \times \text{Information Gain}
+\end{equation}
+
+This represents: ``How much total uncertainty does this rule eliminate across all the data?''
+
+\begin{keyidea}
+\textbf{Rule discovery is about finding the rules with the highest value.}
+
+A rule is valuable if:
+\begin{enumerate}
+    \item It applies frequently (high support)
+    \item It tells you a lot when it applies (high information gain)
+\end{enumerate}
+\end{keyidea}
+
+\subsection{Pointwise Mutual Information (PMI)}
+
+\term{PMI}{A18} is another way to measure how much two things are related:
+
+\begin{equation}
+\text{PMI}(A, B) = \log_2 \frac{P(A \text{ and } B)}{P(A) \times P(B)}
+\end{equation}
+
+\begin{itemize}
+    \item PMI $>$ 0: A and B occur together more than expected (positive relationship)
+    \item PMI = 0: A and B are independent (no relationship)
+    \item PMI $<$ 0: A and B occur together less than expected (negative relationship)
+\end{itemize}
+
+\textbf{Connection to Lift:} $\text{PMI} = \log_2(\text{Lift})$
+
+%----------------------------------------------------------------------
+\section{The Description Length Principle}
+%----------------------------------------------------------------------
+
+\subsection{Minimum Description Length (MDL)}
+
+Here's a powerful idea from information theory: \term{MDL}{A19} says the best model is the one that provides the shortest total description of:
+\begin{enumerate}
+    \item The model itself (the rules)
+    \item The data given the model (exceptions to the rules)
+\end{enumerate}
+
+\begin{equation}
+\text{Total Length} = L(\text{Rules}) + L(\text{Data} | \text{Rules})
+\end{equation}
+
+\subsection{Why This Helps}
+
+Imagine two extremes:
+\begin{enumerate}
+    \item \textbf{No rules:} $L(\text{Rules}) = 0$, but $L(\text{Data})$ is huge (every cell is a surprise)
+    \item \textbf{Too many rules:} $L(\text{Rules})$ is huge, $L(\text{Data}|\text{Rules})$ is small
+\end{enumerate}
+
+The optimal point is somewhere in between---enough rules to capture real patterns, but not so many that we're memorizing noise.
+
+\subsection{Cost of a Rule}
+
+We can calculate how many bits it takes to describe a rule:
+
+\begin{equation}
+L(\text{rule}) = \underbrace{\log_2 \binom{n}{k+1}}_{\text{which columns}} + \underbrace{k \times \log_2 c}_{\text{antecedent values}} + \underbrace{\log_2 c}_{\text{consequent value}}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $n$ = total columns (224)
+    \item $k$ = number of antecedent conditions
+    \item $c$ = average values per column (about 20)
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\caption{Approximate encoding cost per rule}
+\begin{tabular}{@{}cc@{}}
+\toprule
+\textbf{Antecedent Size ($k$)} & \textbf{Bits to Encode Rule} \\
+\midrule
+1 & $\approx 24$ bits \\
+2 & $\approx 32$ bits \\
+3 & $\approx 41$ bits \\
+4 & $\approx 49$ bits \\
+\bottomrule
+\end{tabular}
+\label{tab:encoding_cost}
+\end{table}
+
+\subsection{When Is a Rule Worth Adding?}
+
+A rule is worth adding if it saves more bits than it costs:
+
+\begin{equation}
+\underbrace{L(\text{rule})}_{\text{cost}} < \underbrace{\text{Support} \times \text{Rows} \times \text{Info Gain}}_{\text{savings}}
+\end{equation}
+
+\textbf{Example:} For a $k=2$ rule (cost $\approx$ 32 bits) with 100,000 rows:
+\begin{itemize}
+    \item At 1\% support (1,000 rows): need $\geq 0.032$ bits/row gain
+    \item At 10\% support (10,000 rows): need $\geq 0.0032$ bits/row gain
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Practical Filtering: From Trillions to Thousands}
+%----------------------------------------------------------------------
+
+\subsection{The Filtering Cascade}
+
+We start with trillions of possible rules and filter down through several stages:
+
+\begin{enumerate}
+    \item \textbf{Support filter}: Remove rules that apply to too few rows
+    \item \textbf{Confidence filter}: Remove rules that aren't reliable enough
+    \item \textbf{Lift filter}: Remove rules that aren't better than guessing
+    \item \textbf{Information gain filter}: Remove rules that don't reduce uncertainty
+\end{enumerate}
+
+\subsection{Typical Thresholds}
+
+\begin{table}[h]
+\centering
+\caption{Quality thresholds for useful rules}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Metric} & \textbf{Minimum Value} & \textbf{What It Means} \\
+\midrule
+Support & 0.1\% & At least 100 rows (of 100K) \\
+Confidence & 80\% & Right 4 out of 5 times \\
+Lift & 1.5 & 50\% better than guessing \\
+Information Gain & 0.05 bits & Meaningful reduction in uncertainty \\
+\bottomrule
+\end{tabular}
+\label{tab:thresholds}
+\end{table}
+
+\subsection{The Final Numbers}
+
+\begin{table}[h]
+\centering
+\caption{How filtering reduces the rule space}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Stage} & \textbf{$k=1$} & \textbf{$k=2$} & \textbf{$k=3$} \\
+\midrule
+All possible structures & 49,952 & 5,600,000 & 414,000,000 \\
+After support filter & 2,500 & 28,000 & 104,000 \\
+After confidence filter & 250 & 2,800 & 10,400 \\
+After info gain filter & \textbf{125} & \textbf{1,400} & \textbf{5,200} \\
+\bottomrule
+\end{tabular}
+\label{tab:filtering}
+\end{table}
+
+\begin{infobox}[The Bottom Line]
+\textbf{Theoretical maximum:} Over 3 trillion possible rules
+
+\textbf{After quality filtering:} About 3,000--5,000 useful rules
+
+\textbf{Compression ratio:} We keep only 1 rule for every billion possibilities!
+\end{infobox}
+
+%----------------------------------------------------------------------
+\section{Summary}
+%----------------------------------------------------------------------
+
+\subsection{Key Takeaways}
+
+\begin{enumerate}
+    \item \textbf{Entropy measures uncertainty.} A coin flip has 1 bit of entropy. Spreadsheet cells have 1--20 bits depending on the field type.
+    
+    \item \textbf{Rules are patterns that reduce entropy.} When knowing column A tells you something about column B, there's a rule connecting them.
+    
+    \item \textbf{The rule space is astronomically large.} With 224 columns, there are trillions of possible rules.
+    
+    \item \textbf{Quality filtering is essential.} Support, confidence, lift, and information gain help us find the needles in the haystack.
+    
+    \item \textbf{MDL provides a principled framework.} A rule is worth keeping if it saves more information than it costs to describe.
+    
+    \item \textbf{In practice, we find 3,000--5,000 useful rules.} This is manageable for a computer system to store and apply.
+\end{enumerate}
+
+\subsection{For the tape-whisperer System}
+
+This analysis tells us:
+\begin{itemize}
+    \item We can expect to discover several thousand useful validation rules
+    \item These rules can be stored in a few megabytes of YAML files
+    \item The FP-Growth (Frequent Pattern) algorithm can find them in minutes, not years
+    \item The rules will cover the major patterns while ignoring noise
+\end{itemize}
+
+%======================================================================
+% APPENDICES
+%======================================================================
+\newpage
+\appendix
+\section*{Appendices: Glossary of Terms}
+\addcontentsline{toc}{section}{Appendices: Glossary of Terms}
+
+Each term below is referenced in the main text. They're organized alphabetically by their reference code.
+
+%----------------------------------------------------------------------
+\subsection*{A1: Information Theory}
+\label{A1}
+\addcontentsline{toc}{subsection}{A1: Information Theory}
+
+\textbf{Information theory} is a branch of mathematics that studies how to measure, store, and transmit information. It was invented by Claude Shannon in 1948.
+
+\textbf{Everyday analogy:} Think about texting. Some messages are longer than others because they contain more information. Information theory gives us precise ways to measure ``how much'' information is in a message.
+
+\textbf{Key insight:} Information is related to surprise. ``The sun rose today'' contains little information (not surprising). ``Aliens landed in Paris'' contains a lot of information (very surprising!).
+
+%----------------------------------------------------------------------
+\subsection*{A2: Entropy}
+\label{A2}
+\addcontentsline{toc}{subsection}{A2: Entropy}
+
+\textbf{Entropy} is a number that measures uncertainty or randomness.
+
+\textbf{Simple examples:}
+\begin{itemize}
+    \item A fair coin: entropy = 1 bit (maximum uncertainty for 2 outcomes)
+    \item A die with all sides showing 6: entropy = 0 bits (no uncertainty)
+    \item A fair 6-sided die: entropy = 2.58 bits
+\end{itemize}
+
+\textbf{Why ``entropy''?} The term comes from physics, where it measures disorder. Shannon borrowed it because mathematical properties are similar.
+
+\textbf{Rule of thumb:} For $n$ equally likely outcomes, entropy = $\log_2(n)$ bits.
+
+%----------------------------------------------------------------------
+\subsection*{A3: $H(X)$ --- Entropy Notation}
+\label{A3}
+\addcontentsline{toc}{subsection}{A3: H(X) --- Entropy Notation}
+
+When we write $H(X)$, we mean ``the entropy of X.''
+
+\begin{itemize}
+    \item $H$ is the standard letter used for entropy (named after physicist Ludwig Boltzmann's H-theorem)
+    \item $X$ is whatever we're measuring (a coin flip, a spreadsheet cell, etc.)
+\end{itemize}
+
+\textbf{Examples:}
+\begin{itemize}
+    \item $H(\text{coin flip}) = 1$ bit
+    \item $H(\text{weather tomorrow})$ might be 2 bits (sunny, cloudy, rainy, snowy)
+    \item $H(\text{loan type})$ might be 3 bits if there are 8 equally likely types
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A4: Bits}
+\label{A4}
+\addcontentsline{toc}{subsection}{A4: Bits}
+
+A \textbf{bit} is the smallest unit of information.
+
+\textbf{What it represents:} The answer to one yes/no question.
+
+\textbf{Examples:}
+\begin{itemize}
+    \item ``Is the number greater than 50?'' --- answering this gives you 1 bit
+    \item To identify a card from a deck of 52, you need about 6 bits ($\log_2(52) \approx 5.7$)
+    \item A byte = 8 bits, which is enough to represent any letter, number, or symbol
+\end{itemize}
+
+\textbf{In computers:} Everything is stored in bits (0s and 1s). A 1-megabyte file contains about 8 million bits.
+
+%----------------------------------------------------------------------
+\subsection*{A5: $\sum$ --- Summation}
+\label{A5}
+\addcontentsline{toc}{subsection}{A5: Summation Symbol}
+
+The symbol $\sum$ (capital Greek letter sigma) means ``add up all of these.''
+
+\textbf{How to read it:}
+\[
+\sum_{i=1}^{n} x_i = x_1 + x_2 + x_3 + \cdots + x_n
+\]
+
+\textbf{Example:} The sum of numbers 1 through 5:
+\[
+\sum_{i=1}^{5} i = 1 + 2 + 3 + 4 + 5 = 15
+\]
+
+\textbf{In entropy formula:} We add up the ``surprise'' contribution from each possible outcome.
+
+%----------------------------------------------------------------------
+\subsection*{A6: $p(x_i)$ --- Probability}
+\label{A6}
+\addcontentsline{toc}{subsection}{A6: Probability Notation}
+
+$p(x_i)$ means ``the probability that outcome $x_i$ happens.''
+
+\textbf{Properties of probability:}
+\begin{itemize}
+    \item Always between 0 and 1 (or 0\% and 100\%)
+    \item All probabilities must add up to 1 (something has to happen!)
+\end{itemize}
+
+\textbf{Examples:}
+\begin{itemize}
+    \item For a fair coin: $p(\text{heads}) = 0.5$
+    \item For a fair die: $p(\text{rolling a 6}) = \frac{1}{6} \approx 0.167$
+    \item For loan types: $p(\text{FHA}) = 0.15$ means 15\% of loans are FHA
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A7: $\log_2$ --- Logarithm Base 2}
+\label{A7}
+\addcontentsline{toc}{subsection}{A7: Logarithm Base 2}
+
+$\log_2(x)$ asks: ``2 raised to what power gives $x$?''
+
+\textbf{Examples:}
+\begin{itemize}
+    \item $\log_2(2) = 1$ because $2^1 = 2$
+    \item $\log_2(4) = 2$ because $2^2 = 4$
+    \item $\log_2(8) = 3$ because $2^3 = 8$
+    \item $\log_2(1) = 0$ because $2^0 = 1$
+    \item $\log_2(0.5) = -1$ because $2^{-1} = 0.5$
+\end{itemize}
+
+\textbf{Why base 2?} Because computers use binary (0s and 1s). This makes the answer come out in bits.
+
+\textbf{Key property:} $\log_2(a \times b) = \log_2(a) + \log_2(b)$
+
+%----------------------------------------------------------------------
+\subsection*{A8: Independence}
+\label{A8}
+\addcontentsline{toc}{subsection}{A8: Independence}
+
+Two things are \textbf{independent} if knowing one tells you nothing about the other.
+
+\textbf{Independent examples:}
+\begin{itemize}
+    \item Flipping two different coins --- the first flip doesn't affect the second
+    \item Your birthday and tomorrow's weather
+\end{itemize}
+
+\textbf{NOT independent (dependent):}
+\begin{itemize}
+    \item Height and shoe size (taller people tend to have bigger feet)
+    \item Loan type and required down payment (FHA requires specific minimums)
+\end{itemize}
+
+\textbf{Mathematical test:} A and B are independent if $P(A \text{ and } B) = P(A) \times P(B)$
+
+%----------------------------------------------------------------------
+\subsection*{A9: Dependencies}
+\label{A9}
+\addcontentsline{toc}{subsection}{A9: Dependencies}
+
+A \textbf{dependency} exists when one variable provides information about another.
+
+\textbf{In spreadsheets:} Dependencies are the basis of validation rules. If Column A's value constrains what's valid in Column B, there's a dependency.
+
+\textbf{Types of dependencies:}
+\begin{itemize}
+    \item \textit{Functional}: B is completely determined by A (like birth date → age)
+    \item \textit{Partial}: A gives partial information about B (like zip code → likely state)
+    \item \textit{Statistical}: A and B tend to co-occur (like high income → high credit score)
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A10: Conditional Entropy}
+\label{A10}
+\addcontentsline{toc}{subsection}{A10: Conditional Entropy}
+
+\textbf{Conditional entropy} $H(B|A)$ measures uncertainty about B \textit{after} you learn A.
+
+\textbf{Key insight:} $H(B|A) \leq H(B)$ always. Knowing something never increases uncertainty!
+
+\textbf{Example:}
+\begin{itemize}
+    \item $H(\text{interest rate})$ = 4 bits (many possible rates)
+    \item $H(\text{interest rate} | \text{loan type})$ = 2 bits (knowing loan type narrows it down)
+    \item Information gained = $4 - 2 = 2$ bits
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A11: Association Rule}
+\label{A11}
+\addcontentsline{toc}{subsection}{A11: Association Rule}
+
+An \textbf{association rule} is a pattern of the form: IF [conditions] THEN [result].
+
+\textbf{Famous example from retail:}
+``IF customer buys diapers THEN customer likely buys beer''
+
+(This famous pattern was supposedly discovered in supermarket data!)
+
+\textbf{In data validation:}
+``IF loan\_type = 'FHA' AND property\_type = 'Condo' THEN HOA\_status must be 'Active'''
+
+%----------------------------------------------------------------------
+\subsection*{A12: $k$ --- Antecedent Size}
+\label{A12}
+\addcontentsline{toc}{subsection}{A12: k --- Antecedent Size}
+
+$k$ represents the number of conditions in the ``IF'' part of a rule.
+
+\begin{itemize}
+    \item $k=1$: Simple rule with one condition
+    \item $k=2$: Rule with two conditions combined with AND
+    \item $k=3$: Three conditions, etc.
+\end{itemize}
+
+\textbf{Trade-off:}
+\begin{itemize}
+    \item Higher $k$ = more specific rules (potentially more accurate)
+    \item Higher $k$ = exponentially more possible rules (harder to find)
+    \item Higher $k$ = rules apply to fewer rows (lower support)
+\end{itemize}
+
+\textbf{In practice:} Most useful rules have $k$ between 1 and 3.
+
+%----------------------------------------------------------------------
+\subsection*{A13: Combinations}
+\label{A13}
+\addcontentsline{toc}{subsection}{A13: Combinations}
+
+$\binom{n}{k}$ (read ``n choose k'') counts how many ways to select $k$ items from $n$ items when order doesn't matter.
+
+\textbf{Formula:}
+\[
+\binom{n}{k} = \frac{n!}{k!(n-k)!}
+\]
+
+where $n!$ (``n factorial'') = $n \times (n-1) \times (n-2) \times \cdots \times 1$
+
+\textbf{Examples:}
+\begin{itemize}
+    \item $\binom{5}{2} = 10$ (ways to choose 2 items from 5)
+    \item $\binom{52}{5} = 2,598,960$ (possible 5-card poker hands)
+    \item $\binom{224}{3} = 1,847,424$ (ways to choose 3 columns from 224)
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A14: Support}
+\label{A14}
+\addcontentsline{toc}{subsection}{A14: Support}
+
+\textbf{Support} is the frequency of a rule in the data---what fraction of rows match the rule's conditions AND conclusion.
+
+\textbf{Formula:}
+\[
+\text{Support} = \frac{\text{rows matching both IF and THEN}}{\text{total rows}}
+\]
+
+\textbf{Why it matters:} A rule with 0.0001\% support only applies to 1 in a million rows. Even if it's correct, it's not very useful.
+
+\textbf{Typical threshold:} 0.1\% to 1\% minimum support
+
+%----------------------------------------------------------------------
+\subsection*{A15: Confidence}
+\label{A15}
+\addcontentsline{toc}{subsection}{A15: Confidence}
+
+\textbf{Confidence} measures how often the rule is correct when its conditions are met.
+
+\textbf{Formula:}
+\[
+\text{Confidence} = \frac{\text{rows matching both IF and THEN}}{\text{rows matching IF}}
+\]
+
+\textbf{Example:}
+\begin{itemize}
+    \item 1,000 loans are FHA with valid down payment
+    \item 1,100 loans are FHA total
+    \item Confidence = $\frac{1000}{1100} = 90.9\%$
+\end{itemize}
+
+\textbf{Typical threshold:} 80\% or higher
+
+%----------------------------------------------------------------------
+\subsection*{A16: Lift}
+\label{A16}
+\addcontentsline{toc}{subsection}{A16: Lift}
+
+\textbf{Lift} measures how much better a rule is compared to random chance.
+
+\textbf{Formula:}
+\[
+\text{Lift} = \frac{\text{Confidence}}{\text{Probability of conclusion happening anyway}}
+\]
+
+\textbf{Interpretation:}
+\begin{itemize}
+    \item Lift = 1: No better than guessing
+    \item Lift = 2: Twice as good as guessing
+    \item Lift = 0.5: Half as good as guessing (anti-pattern)
+\end{itemize}
+
+%----------------------------------------------------------------------
+\subsection*{A17: Information Gain}
+\label{A17}
+\addcontentsline{toc}{subsection}{A17: Information Gain}
+
+\textbf{Information gain} is the reduction in entropy when you learn something new.
+
+\textbf{Formula:}
+\[
+\text{Information Gain} = H(\text{before}) - H(\text{after})
+\]
+
+\textbf{Example:}
+\begin{itemize}
+    \item Before knowing loan type: 5 bits of uncertainty about rate
+    \item After knowing loan type: 2 bits of uncertainty about rate
+    \item Information gain: 3 bits
+\end{itemize}
+
+\textbf{Connection to rules:} A good rule has high information gain---knowing the IF part tells you a lot about the THEN part.
+
+%----------------------------------------------------------------------
+\subsection*{A18: PMI --- Pointwise Mutual Information}
+\label{A18}
+\addcontentsline{toc}{subsection}{A18: Pointwise Mutual Information}
+
+\textbf{PMI} measures how much more (or less) often two things occur together compared to if they were independent.
+
+\textbf{Formula:}
+\[
+\text{PMI}(A,B) = \log_2 \frac{P(A \text{ and } B)}{P(A) \times P(B)}
+\]
+
+\textbf{Interpretation:}
+\begin{itemize}
+    \item PMI $>$ 0: A and B occur together more than expected
+    \item PMI = 0: A and B are independent
+    \item PMI $<$ 0: A and B avoid each other
+\end{itemize}
+
+\textbf{Connection to Lift:} PMI = $\log_2(\text{Lift})$
+
+%----------------------------------------------------------------------
+\subsection*{A19: MDL --- Minimum Description Length}
+\label{A19}
+\addcontentsline{toc}{subsection}{A19: Minimum Description Length}
+
+\textbf{MDL} is a principle for model selection: the best model is the one that gives the shortest total description.
+
+\textbf{Idea:} Imagine you need to send a dataset to a friend. You could either:
+\begin{enumerate}
+    \item Send the raw data (very long!)
+    \item Send some rules + exceptions (potentially shorter)
+\end{enumerate}
+
+\textbf{Trade-off:}
+\begin{itemize}
+    \item More rules = shorter data description, but longer rule description
+    \item Fewer rules = shorter rule description, but longer data description
+\end{itemize}
+
+\textbf{Optimal:} Find the sweet spot that minimizes total length.
+
+\textbf{Why it helps:} MDL naturally prevents overfitting (memorizing noise) because noise is expensive to describe.
+
+%----------------------------------------------------------------------
+\subsection*{Quick Reference Table}
+\label{quick_ref}
+\addcontentsline{toc}{subsection}{Quick Reference Table}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llp{6cm}@{}}
+\toprule
+\textbf{Symbol} & \textbf{Name} & \textbf{Meaning} \\
+\midrule
+$H(X)$ & Entropy & Average surprise/uncertainty in $X$ \\
+$H(B|A)$ & Conditional entropy & Uncertainty in $B$ after knowing $A$ \\
+$p(x)$ & Probability & Chance of $x$ happening (0 to 1) \\
+$\log_2$ & Log base 2 & ``What power of 2 gives this?'' \\
+$\sum$ & Sum & Add up all terms \\
+$\binom{n}{k}$ & Combinations & Ways to choose $k$ from $n$ \\
+$k$ & Antecedent size & Number of conditions in rule \\
+$n$ & Column count & Total number of columns \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}llp{6cm}@{}}
+\toprule
+\textbf{Metric} & \textbf{Formula Intuition} & \textbf{What It Measures} \\
+\midrule
+Support & How often does this apply? & Frequency of rule in data \\
+Confidence & When it applies, how accurate? & Reliability of rule \\
+Lift & Better than random? & Improvement over guessing \\
+Info Gain & How much uncertainty removed? & Value of the information \\
+PMI & Related or independent? & Strength of association \\
+\bottomrule
+\end{tabular}
+\caption{Quick reference for rule quality metrics}
+\end{table}
+
+\end{document}
